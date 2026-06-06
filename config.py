@@ -5,13 +5,13 @@ Dashboard 全局配置
 import sys
 from pathlib import Path
 
-# 项目根路径
-BASE_DIR = Path(r"E:\WorkBuddy")
+# 项目根路径 — 从 Dashboard 自身位置推算：../../ = E:\WorkBuddy
+BASE_DIR = Path(__file__).parent.parent.resolve()
 LISTING_DATA_DIR = BASE_DIR / "amazon-listings"
 SKILL_LIB_DIR = BASE_DIR / "amazon-listing-skill" / "lib"
 BRANDSTORE_SKILL_DIR = BASE_DIR / "amazon-brandstore-skill"
 BRANDSTORE_DATA_DIR = BASE_DIR / "amazon-dashboard" / "data" / "brandstore"
-BRANDSTORE_SCREENSHOT_DIR = Path(r"C:\Users\Administrator\亚马逊资料\claude code自进化\品牌旗舰店模块示例")
+BRANDSTORE_SCREENSHOT_DIR = Path.home() / "亚马逊资料" / "claude code自进化" / "品牌旗舰店模块示例"
 
 # Skill 3.0 广告分析器
 ADS_SKILL_DIR = BASE_DIR / "amazon-ads-analyzer"
