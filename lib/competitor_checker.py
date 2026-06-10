@@ -18,8 +18,10 @@ class CompetitorChecker:
 
     def __init__(
         self,
-        snapshot_dir: str = r"E:\WorkBuddy\amazon-listings\_shared\competitor_snapshots",
+        snapshot_dir: str = "",
     ):
+        if not snapshot_dir:
+            snapshot_dir = str(Path(__file__).parent.parent.parent / "amazon-listings" / "_shared" / "competitor_snapshots")
         self.snapshot_dir = Path(snapshot_dir)
 
     def _load_snapshots(

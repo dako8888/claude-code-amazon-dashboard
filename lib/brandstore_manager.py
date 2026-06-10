@@ -5,8 +5,8 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-# 延迟导入避免 Streamlit 环境冲突
-DATA_DIR = Path(r"E:\WorkBuddy\amazon-dashboard\data\brandstore")
+# 数据目录从 Dashboard 自身位置推算
+DATA_DIR = Path(__file__).parent.parent / "data" / "brandstore"
 
 
 def _ensure_dir() -> None:
