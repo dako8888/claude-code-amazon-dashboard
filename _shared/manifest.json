@@ -1,16 +1,22 @@
 {
-  "_description": "Dashboard 单事实来源",
+  "_description": "Dashboard 单事实来源。只检查确实携带版本号的文件。",
+  "_rule": "此文件是唯一手动维护的版本/术语来源。",
+
   "skill": {
     "name": "amazon-dashboard",
     "version": "1.0.0",
     "updated": "2026-06-13",
     "description": "Amazon Workflow Dashboard — Skill 1.0/2.0/3.0 统一运维面板"
   },
+
   "version_files": {
-    "primary": ["app.py", "config.py"]
+    "primary": ["app.py"]
   },
+
   "terms": {},
+
   "forbidden_patterns": {},
+
   "auto_memory_sync": {"files": []},
   "gitignore_required": {"entries": ["__pycache__/", "*.pyc"]}
 }

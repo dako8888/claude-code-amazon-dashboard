@@ -63,7 +63,7 @@ def check_version_consistency(manifest: dict) -> list[dict]:
             unique_files.append(f)
 
     # 只匹配 Skill 3.0 版本号格式: v2.x.x（避免误匹配 3.5.x 等不相关数字）
-    ver_pattern = re.compile(r'\bv?(2\.\d+\.\d+)\b')
+    ver_pattern = re.compile(r'\bv?(\d+\.\d+\.\d+)\b')
 
     for rel_path in unique_files:
         fpath = PROJECT_ROOT / rel_path
@@ -210,7 +210,7 @@ def check_auto_memory(manifest: dict) -> list[dict]:
     expected = manifest["skill"]["version"]
     memory_files = manifest.get("auto_memory_sync", {}).get("files", [])
 
-    ver_pattern = re.compile(r'\bv?(2\.\d+\.\d+)\b')  # 只匹配 Skill 3.0 版本
+    ver_pattern = re.compile(r'\bv?(\d+\.\d+\.\d+)\b')  # 只匹配 Skill 3.0 版本
 
     for mem_path_str in memory_files:
         mem_path = Path(mem_path_str)

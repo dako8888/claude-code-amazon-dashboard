@@ -1593,5 +1593,5 @@ elif "品牌旗舰店" in page:
 # ---- Footer ----
 st.divider()
 st.caption(
-    f"Amazon Workflow Dashboard v1.0 | 数据目录: {store['data_dir']} | 更新: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    f"Amazon Workflow Dashboard v1.0.0 | 数据目录: {store['data_dir']} | 更新: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
 )
