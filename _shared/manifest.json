@@ -1,0 +1,16 @@
+{
+  "_description": "Dashboard 单事实来源",
+  "skill": {
+    "name": "amazon-dashboard",
+    "version": "1.0.0",
+    "updated": "2026-06-13",
+    "description": "Amazon Workflow Dashboard — Skill 1.0/2.0/3.0 统一运维面板"
+  },
+  "version_files": {
+    "primary": ["app.py", "config.py"]
+  },
+  "terms": {},
+  "forbidden_patterns": {},
+  "auto_memory_sync": {"files": []},
+  "gitignore_required": {"entries": ["__pycache__/", "*.pyc"]}
+}
