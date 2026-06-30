@@ -8,13 +8,13 @@ from pathlib import Path
 # 项目根路径 — 从 Dashboard 自身位置推算：../../ = E:\WorkBuddy
 BASE_DIR = Path(__file__).parent.parent.resolve()
 LISTING_DATA_DIR = BASE_DIR / "amazon-listings"
-SKILL_LIB_DIR = BASE_DIR / "amazon-listing-skill" / "lib"
-BRANDSTORE_SKILL_DIR = BASE_DIR / "amazon-brandstore-skill"
+SKILL_LIB_DIR = Path.home() / ".claude" / "skills" / "amazon-listing" / "lib"
+BRANDSTORE_SKILL_DIR = Path.home() / ".claude" / "skills" / "amazon-brandstore"
 BRANDSTORE_DATA_DIR = BASE_DIR / "amazon-dashboard" / "data" / "brandstore"
 BRANDSTORE_SCREENSHOT_DIR = Path.home() / "亚马逊资料" / "claude code自进化" / "品牌旗舰店模块示例"
 
 # Skill 3.0 广告分析器
-ADS_SKILL_DIR = BASE_DIR / "amazon-ads-analyzer"
+ADS_SKILL_DIR = Path.home() / ".claude" / "skills" / "amazon-ads-analyzer"
 ADS_SCRIPTS_DIR = ADS_SKILL_DIR / "scripts"
 ADS_LIB_DIR = ADS_SKILL_DIR / "lib"
 ADS_SHARED_DIR = ADS_SKILL_DIR / "_shared"
@@ -92,4 +92,18 @@ BRANDSTORE_MAINTENANCE = {
     "competitor_store_audit": 30,    # 每 30 天竞品旗舰店审计
     "seasonal_content_update": 30,   # 旺季前 30 天更新内容
     "content_refresh": 90,           # 每 90 天全局内容刷新
+}
+
+# Obsidian 知识库（vault）
+OBSIDIAN_VAULT_DIR = Path(r"E:\Obsidian\AmazonKB")
+OBSIDIAN_DATA_DIR = BASE_DIR / "amazon-dashboard" / "data" / "obsidian"
+OBSIDIAN_AUDIT_DIR = OBSIDIAN_VAULT_DIR / "_audit"           # manifest.json + backups/
+OBSIDIAN_MANIFEST_PATH = OBSIDIAN_AUDIT_DIR / "manifest.json"
+OBSIDIAN_CLAUDIAN_REPORTS_DIR = OBSIDIAN_DATA_DIR / "claudian_reports"
+
+# 知识库维护周期
+OBSIDIAN_MAINTENANCE = {
+    "vault_lint": 14,            # 每 14 天跑一次客观体检脚本
+    "claudian_evaluation": 30,   # 每 30 天跑一次 Claudian 5 维度语义评估
+    "stale_review": 90,          # 每 90 天复核过时标注
 }

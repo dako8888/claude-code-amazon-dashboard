@@ -200,6 +200,7 @@ page = st.sidebar.radio(
         "📆 季节性运营日历",
         "🖼️ 图片库存",
         "🏪 品牌旗舰店",
+        "🧠 知识库体检",
     ],
     label_visibility="collapsed",
 )
@@ -1588,6 +1589,484 @@ elif "品牌旗舰店" in page:
 
         # 维护提醒
         python maintenance_check.py {store_key} {brand}""", language="bash")
+
+
+# ---- Page: 知识库体检 ----
+elif "知识库体检" in page:
+    sys.path.insert(0, str(Path(__file__).parent / "lib"))
+    from obsidian_manager import (
+        load_state as obs_load_state,
+        save_state as obs_save_state,
+        load_snapshots as obs_load_snapshots,
+        add_snapshot as obs_add_snapshot,
+        get_latest_snapshot as obs_get_latest_snapshot,
+        compute_trends as obs_compute_trends,
+        get_maintenance_alerts as obs_get_alerts,
+        init_maintenance_schedule as obs_init_maint,
+        run_vault_lint as obs_run_lint,
+        save_lint_snapshot as obs_save_snapshot,
+        generate_claudian_prompt as obs_gen_prompt,
+        save_claudian_result as obs_save_claudian,
+        load_latest_claudian_report as obs_load_claudian,
+        list_claudian_reports as obs_list_claudian,
+        list_experience_cards as obs_list_cards,
+        create_experience_card as obs_create_card,
+        append_log_entry as obs_append_log,
+    )
+
+    page_header("知识库体检", "Obsidian AmazonKB · 12 项客观检查 + Claudian 5 维度语义评估 · 趋势追踪", "#6366F1")
+
+    obs_state = obs_load_state()
+
+    # 首次使用提示
+    if not obs_state.get("maintenance", {}).get("next_vault_lint"):
+        st.info("首次使用，已初始化维护计划。点 [立即体检] 开始第一次扫描。")
+        obs_state = obs_init_maint()
+
+    # Tab 结构
+    tabs = st.tabs(["📊 总览看板", "📸 体检快照", "🔍 问题详情", "🤖 Claudian 评估", "📝 经验沉淀"])
+
+    # ================================================================
+    # Tab 1: 总览看板
+    # ================================================================
+    with tabs[0]:
+        st.subheader("综合健康度")
+
+        # KPI 行
+        kc1, kc2, kc3, kc4 = st.columns(4)
+
+        with kc1:
+            score = obs_state.get("health_score")
+            if score is None:
+                st.metric("综合健康度", "—", "未体检")
+            else:
+                rating = "A" if score >= 90 else ("B" if score >= 75 else ("C" if score >= 60 else "D"))
+                color = "#2ecc71" if score >= 75 else ("#f39c12" if score >= 60 else "#e74c3c")
+                st.markdown(f"""
+                <div style="text-align:center;padding:0.6rem 0;">
+                  <div style="font-size:0.75rem;color:#888;text-transform:uppercase;letter-spacing:0.5px;">综合健康度</div>
+                  <div style="font-size:2.2rem;font-weight:700;color:{color};">{score:.1f}</div>
+                  <div style="font-size:0.75rem;color:#666;">评级 {rating}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+        with kc2:
+            obj_score = obs_state.get("objective_score")
+            st.metric("脚本客观分", f"{obj_score:.1f}" if obj_score is not None else "—",
+                      help="12 项客观检查：error 扣5/warn 扣2/info 扣0.5")
+
+        with kc3:
+            claudian_score = obs_state.get("claudian_score")
+            st.metric("Claudian 语义分", f"{claudian_score:.1f}" if claudian_score is not None else "—",
+                      help="5 维度语义评估（知识完整性/逻辑一致性/时效性/可操作性/连接丰富度），5分制转100")
+
+        with kc4:
+            last_lint = obs_state.get("last_lint_date", "从未")
+            st.metric("上次体检", last_lint)
+
+        # 问题统计
+        st.divider()
+        kc5, kc6, kc7, kc8 = st.columns(4)
+        with kc5:
+            st.metric("总问题数", obs_state.get("total_issues", 0))
+        with kc6:
+            st.metric("错误", obs_state.get("error_count", 0))
+        with kc7:
+            st.metric("告警", obs_state.get("warn_count", 0))
+        with kc8:
+            st.metric("已自动修复", obs_state.get("auto_fixed_count", 0))
+
+        # 立即体检按钮
+        st.divider()
+        col_a, col_b, col_c = st.columns([2, 1, 1])
+        with col_a:
+            if st.button("🔍 立即体检", type="primary", use_container_width=True, key="btn_run_lint"):
+                with st.spinner("正在跑 12 项检查..."):
+                    lint_result = obs_run_lint(apply_fix=False)
+                if lint_result.get("passed") is not None:
+                    snapshot = obs_save_snapshot(lint_result)
+                    # 追加 log.md
+                    try:
+                        obs_append_log(lint_result)
+                    except Exception as e:
+                        st.warning(f"log.md 追加失败: {e}")
+                    st.success(f"体检完成 — {snapshot['total_issues']} 个问题（错误 {snapshot['error_count']} / 告警 {snapshot['warn_count']} / 信息 {snapshot['info_count']}）")
+                    st.rerun()
+                else:
+                    st.error(f"体检失败: {lint_result.get('error', '未知错误')}")
+        with col_b:
+            if st.button("🔧 体检并自动修复", use_container_width=True, key="btn_run_fix",
+                         help="跑检查 + 自动修复确定性问题（只改 wiki/，备份到 _audit/backups/）"):
+                with st.spinner("正在体检并修复..."):
+                    lint_result = obs_run_lint(apply_fix=True)
+                if lint_result.get("passed") is not None:
+                    snapshot = obs_save_snapshot(lint_result)
+                    try:
+                        obs_append_log(lint_result)
+                    except Exception as e:
+                        st.warning(f"log.md 追加失败: {e}")
+                    fixed = lint_result.get("auto_fixed_count", 0)
+                    st.success(f"体检+修复完成 — 自动修复 {fixed} 项，剩余 {snapshot['total_issues']} 个问题")
+                    st.rerun()
+                else:
+                    st.error(f"体检失败: {lint_result.get('error')}")
+        with col_c:
+            if st.button("🔄 重置维护计划", use_container_width=True, key="btn_reset_maint"):
+                obs_init_maint()
+                st.success("维护计划已重置")
+                st.rerun()
+
+        # 维护提醒
+        st.divider()
+        st.subheader("🔔 维护提醒")
+        alerts = obs_get_alerts()
+        if alerts:
+            for a in alerts:
+                icon = "🔴" if a["urgency"] == "due" else "🟡"
+                st.warning(f"{icon} **{a['name']}** — {a['desc']}" + (f" (已逾期 {a['days']} 天)" if a["urgency"] == "due" else f" ({a['days']} 天后到期)"))
+        else:
+            st.success("✅ 暂无到期维护动作")
+
+        # 健康度趋势
+        snapshots = obs_load_snapshots()
+        if len(snapshots) >= 2:
+            st.divider()
+            st.subheader("📈 健康度趋势")
+            try:
+                import plotly.express as px
+                import pandas as pd
+                trend_data = []
+                for s in snapshots:
+                    trend_data.append({
+                        "日期": s.get("snapshot_date", ""),
+                        "健康度": s.get("health_score", 0),
+                        "客观分": s.get("objective_score", 0),
+                        "问题数": s.get("total_issues", 0),
+                    })
+                df_trend = pd.DataFrame(trend_data)
+                fig = px.line(df_trend, x="日期", y=["健康度", "客观分"],
+                              title="健康度 & 客观分趋势", markers=True)
+                fig.update_layout(height=320, margin=dict(l=20, r=20, t=40, b=20))
+                st.plotly_chart(fig, use_container_width=True)
+            except ImportError:
+                st.dataframe(df_trend, use_container_width=True)
+
+    # ================================================================
+    # Tab 2: 体检快照
+    # ================================================================
+    with tabs[1]:
+        st.subheader("体检快照历史")
+
+        snapshots = obs_load_snapshots()
+        if not snapshots:
+            empty_state("📸", "暂无体检快照", "点 Tab 1 的 [立即体检] 跑第一次扫描")
+        else:
+            # 最新快照详情
+            latest = snapshots[-1]
+            with st.expander(f"最新快照 — {latest.get('snapshot_date', '?')} | 健康度 {latest.get('health_score', '—')} | 问题 {latest.get('total_issues', 0)}", expanded=True):
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("总问题", latest.get("total_issues", 0))
+                c2.metric("错误", latest.get("error_count", 0))
+                c3.metric("告警", latest.get("warn_count", 0))
+                c4.metric("信息", latest.get("info_count", 0))
+
+                st.write("**各类别问题数**")
+                by_cat = latest.get("issues_by_category", {})
+                if by_cat:
+                    cat_names = {
+                        "deterministic": "确定性检查",
+                        "structure_timeliness": "结构+时效",
+                        "heuristic": "启发式检查",
+                        "log_check": "日志连续性",
+                    }
+                    for cat, count in by_cat.items():
+                        st.write(f"- {cat_names.get(cat, cat)}: {count}")
+
+                if latest.get("claudian_score") is not None:
+                    st.write(f"**Claudian 语义分**: {latest['claudian_score']}")
+                if latest.get("auto_fixed_count", 0) > 0:
+                    st.info(f"本次自动修复 {latest['auto_fixed_count']} 项")
+
+            # 趋势对比
+            if len(snapshots) >= 2:
+                st.divider()
+                st.subheader("趋势对比")
+                trends = obs_compute_trends(snapshots)
+                if trends:
+                    tc1, tc2 = st.columns(2)
+                    with tc1:
+                        t = trends.get("total_issues", {})
+                        delta = f"{t.get('change_pct', 0):+.1f}%"
+                        st.metric("问题数变化", t.get("current", 0), delta)
+                    with tc2:
+                        h = trends.get("health_score", {})
+                        delta = f"{h.get('change_pct', 0):+.1f}%"
+                        st.metric("健康度变化", h.get("current", 0), delta)
+
+            # 历史快照列表
+            st.divider()
+            st.subheader("📋 历史快照")
+            for s in reversed(snapshots[-15:]):
+                with st.expander(f"{s.get('snapshot_date', '?')} — 健康 {s.get('health_score', '—')} | 问题 {s.get('total_issues', 0)} (错误 {s.get('error_count', 0)}/告警 {s.get('warn_count', 0)}/信息 {s.get('info_count', 0)})"):
+                    st.json({
+                        "客观分": s.get("objective_score"),
+                        "语义分": s.get("claudian_score"),
+                        "自动修复": s.get("auto_fixed_count", 0),
+                        "各类别": s.get("issues_by_category", {}),
+                    })
+
+    # ================================================================
+    # Tab 3: 问题详情
+    # ================================================================
+    with tabs[2]:
+        st.subheader("问题详情")
+
+        if st.button("🔍 实时体检（不保存）", key="btn_realtime_lint", help="跑一次检查看当前问题，不写入快照"):
+            with st.spinner("扫描中..."):
+                lint_result = obs_run_lint(apply_fix=False)
+            if lint_result.get("passed") is None:
+                st.error(f"体检失败: {lint_result.get('error')}")
+                st.stop()
+            st.session_state["realtime_lint"] = lint_result
+            st.success(f"扫描完成 — {lint_result['total']} 个问题")
+
+        lint_result = st.session_state.get("realtime_lint")
+        if not lint_result:
+            # 用最新快照
+            latest = obs_get_latest_snapshot()
+            if latest:
+                lint_result = latest.get("lint_result", {})
+            if not lint_result:
+                empty_state("🔍", "暂无问题数据", "点 [实时体检] 或 Tab 1 的 [立即体检]")
+                st.stop()
+
+        # 按 status 分 sub-tab
+        all_issues = []
+        for cat, items in lint_result.get("details", {}).items():
+            for item in items:
+                all_issues.append({**item, "category": cat})
+
+        errors = [i for i in all_issues if i.get("status") == "error"]
+        warns = [i for i in all_issues if i.get("status") == "warn"]
+        infos = [i for i in all_issues if i.get("status") == "info"]
+
+        sub_err, sub_warn, sub_info = st.tabs([
+            f"🔴 错误 ({len(errors)})",
+            f"🟡 告警 ({len(warns)})",
+            f"ℹ️ 信息 ({len(infos)})"
+        ])
+
+        with sub_err:
+            if not errors:
+                st.success("✅ 无错误")
+            else:
+                st.dataframe(pd.DataFrame([
+                    {"文件": i.get("file", "")[:50], "规则": i.get("rule", ""),
+                     "行": i.get("line_no", ""), "说明": i.get("msg", "")[:80],
+                     "可修复": "✓" if i.get("auto_fixable") else ""}
+                    for i in errors
+                ]), hide_index=True, use_container_width=True)
+
+        with sub_warn:
+            if not warns:
+                st.success("✅ 无告警")
+            else:
+                st.dataframe(pd.DataFrame([
+                    {"文件": i.get("file", "")[:50], "规则": i.get("rule", ""),
+                     "行": i.get("line_no", ""), "说明": i.get("msg", "")[:80],
+                     "可修复": "✓" if i.get("auto_fixable") else ""}
+                    for i in warns
+                ]), hide_index=True, use_container_width=True)
+
+        with sub_info:
+            if not infos:
+                st.info("ℹ️ 无信息项")
+            else:
+                st.dataframe(pd.DataFrame([
+                    {"文件": i.get("file", "")[:50], "规则": i.get("rule", ""),
+                     "说明": i.get("msg", "")[:80]}
+                    for i in infos
+                ]), hide_index=True, use_container_width=True)
+
+        # 自动修复区
+        st.divider()
+        st.subheader("🔧 自动修复")
+        fixable = [i for i in all_issues if i.get("auto_fixable") and i.get("status") != "ok"]
+        if not fixable:
+            st.success("✅ 无可自动修复的问题")
+        else:
+            st.write(f"可自动修复 {len(fixable)} 项（仅改 wiki/，备份到 _audit/backups/）")
+            if st.button(f"🔧 一键自动修复 {len(fixable)} 项", type="primary", key="btn_fix_all"):
+                with st.spinner("修复中..."):
+                    fix_result = obs_run_lint(apply_fix=True)
+                fixed = fix_result.get("auto_fixed_count", 0)
+                if fixed > 0:
+                    snapshot = obs_save_snapshot(fix_result)
+                    try:
+                        obs_append_log(fix_result)
+                    except Exception:
+                        pass
+                    st.success(f"✅ 已修复 {fixed} 项，备份在 _audit/backups/")
+                    if "realtime_lint" in st.session_state:
+                        del st.session_state["realtime_lint"]
+                    st.rerun()
+                else:
+                    st.warning("未修复任何项")
+
+    # ================================================================
+    # Tab 4: Claudian 评估
+    # ================================================================
+    with tabs[3]:
+        st.subheader("Claudian 5 维度语义评估")
+        st.caption("在 Obsidian Claudian 对话里跑评估，把结果 JSON 粘贴回这里。Dashboard 解析后合并到综合健康度。")
+
+        # 区 1: 生成提示词
+        st.markdown("**第 1 步: 生成提示词**")
+        if st.button("📋 生成 Claudian 评估提示词", key="btn_gen_prompt", use_container_width=True):
+            prompt = obs_gen_prompt()
+            st.session_state["claudian_prompt"] = prompt
+            st.success("✅ 提示词已生成（见下方），复制到 Obsidian Claudian 对话运行")
+
+        if "claudian_prompt" in st.session_state:
+            st.text_area("提示词（Ctrl+A 全选复制）", st.session_state["claudian_prompt"],
+                         height=200, key="prompt_display")
+            st.info("💡 复制上方提示词 → 打开 Obsidian Claudian 对话 → 粘贴 → 运行 → 复制 Claudian 输出的 JSON → 回到下方第 2 步粘贴")
+
+        # 区 2: 粘贴结果
+        st.divider()
+        st.markdown("**第 2 步: 粘贴 Claudian 输出的 JSON**")
+        json_input = st.text_area("粘贴 JSON", height=200, key="claudian_json_input",
+            placeholder='{"eval_date": "2026-06-30", "scores": {"知识完整性": {"score": 4, "evidence": "..."}, ...}, "overall_score": 4.2, "overall_rating": "B", "improvements": {"high": [...], "medium": [...], "low": [...]}, "heuristic_findings": {...}, "summary": "..."}')
+
+        if st.button("💾 保存 Claudian 结果", type="primary", key="btn_save_claudian", disabled=not json_input.strip()):
+            try:
+                saved_path = obs_save_claudian(json_input)
+                st.success(f"✅ 已保存: {saved_path}")
+                st.success("✅ 综合健康度已更新（客观分 70% + 语义分 30%）")
+                st.rerun()
+            except Exception as e:
+                st.error(f"保存失败: {e}")
+
+        # 区 3: 展示最新报告
+        st.divider()
+        st.markdown("**第 3 步: 查看评估结果**")
+        latest_report = obs_load_claudian()
+        if not latest_report:
+            st.info("暂无 Claudian 报告 — 完成上述步骤后显示")
+        else:
+            st.write(f"**评估日期**: {latest_report.get('eval_date', '?')}")
+            overall = latest_report.get("overall_score")
+            rating = latest_report.get("overall_rating", "?")
+            st.write(f"**总体评分**: {overall} / 5  评级: {rating}")
+            st.write(f"**总结**: {latest_report.get('summary', '')}")
+
+            # 5 维度雷达图
+            scores = latest_report.get("scores", {})
+            if scores:
+                st.divider()
+                st.subheader("5 维度评分")
+                try:
+                    import plotly.graph_objects as go
+                    categories = list(scores.keys())
+                    values = [scores[c].get("score", 0) if isinstance(scores[c], dict) else scores[c] for c in categories]
+                    fig = go.Figure(data=go.Scatterpolar(
+                        r=values + [values[0]],
+                        theta=categories + [categories[0]],
+                        fill="toself",
+                        line_color="#6366F1",
+                    ))
+                    fig.update_layout(
+                        polar=dict(radialaxis=dict(range=[0, 5])),
+                        height=400,
+                        margin=dict(l=40, r=40, t=40, b=40),
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                except Exception:
+                    # 退化展示
+                    for cat, data in scores.items():
+                        score = data.get("score") if isinstance(data, dict) else data
+                        evidence = data.get("evidence", "") if isinstance(data, dict) else ""
+                        st.metric(cat, f"{score}/5", evidence)
+
+            # 改进建议
+            improvements = latest_report.get("improvements", {})
+            if improvements:
+                st.divider()
+                st.subheader("改进建议")
+                for level, label in [("high", "🔴 高优先级"), ("medium", "🟡 中优先级"), ("low", "🟢 低优先级")]:
+                    items = improvements.get(level, [])
+                    if items:
+                        st.write(f"**{label} ({len(items)} 项)**")
+                        for i, item in enumerate(items, 1):
+                            st.write(f"{i}. {item}")
+
+            # 启发式发现
+            heuristic = latest_report.get("heuristic_findings", {})
+            if heuristic:
+                st.divider()
+                st.subheader("启发式发现（Claudian 判断）")
+                for key, label in [("orphan_pages", "孤岛页面"), ("cross_topic_missing_links", "跨主题缺链"), ("concept_repeat", "概念未独立成页"), ("fact_contradictions", "事实矛盾")]:
+                    items = heuristic.get(key, [])
+                    if items:
+                        st.write(f"**{label}**")
+                        for item in items:
+                            st.write(f"- {item}")
+
+        # 历史报告
+        st.divider()
+        st.subheader("📋 历史 Claudian 报告")
+        reports = obs_list_claudian()
+        if reports:
+            for r in reports[:10]:
+                st.write(f"- {r['file']} — 评分 {r.get('overall_score', '—')} / 评级 {r.get('overall_rating', '—')} — {r.get('summary', '')[:60]}")
+        else:
+            st.caption("暂无历史报告")
+
+    # ================================================================
+    # Tab 5: 经验沉淀
+    # ================================================================
+    with tabs[4]:
+        st.subheader("经验卡沉淀")
+        st.caption("6 段结构：场景 / 做法 / 结果 / 坑 / 沉淀 / 相关 — 对齐已有 5 份经验卡格式")
+
+        # 历史经验卡列表
+        cards = obs_list_cards()
+        if cards:
+            st.write(f"**已有 {len(cards)} 份经验卡**（raw/日常沉淀/）")
+            st.dataframe(pd.DataFrame([
+                {"文件": c["file"][:50], "标题": c["title"], "修改时间": c["modified"]}
+                for c in cards
+            ]), hide_index=True, use_container_width=True)
+        else:
+            st.info("暂无经验卡")
+
+        # 新增经验卡表单
+        st.divider()
+        st.subheader("📝 新增经验卡")
+        with st.form("create_card_form"):
+            title = st.text_input("标题", placeholder="例：vault v1.0 知识库体检评估校准")
+
+            c1, c2 = st.columns(2)
+            with c1:
+                scene = st.text_area("场景", height=80, placeholder="为什么做这次评估/校准")
+                result = st.text_area("结果", height=80, placeholder="健康度评分 / 问题数 / 修复数")
+            with c2:
+                steps = st.text_area("做法", height=80, placeholder="跑了哪些步骤")
+                pitfalls = st.text_area("坑", height=80, placeholder="踩了什么坑")
+
+            lessons = st.text_area("沉淀", height=80, placeholder="提炼的方法论/规律")
+            related = st.text_area("相关", height=60, placeholder="关联文件/经验卡 [[xxx]]")
+
+            if st.form_submit_button("💾 生成经验卡", type="primary"):
+                if not title.strip():
+                    st.error("请输入标题")
+                else:
+                    try:
+                        saved = obs_create_card(title, scene, steps, result, pitfalls, lessons, related)
+                        st.success(f"✅ 已生成: {saved}")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"生成失败: {e}")
 
 
 # ---- Footer ----
